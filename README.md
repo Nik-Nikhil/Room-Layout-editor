@@ -1,50 +1,100 @@
-Industrial Electrical Room — 3D Layout Editor
+# ⚡ Industrial Electrical Room — 3D Layout Editor
 
-Live Demo: https://room-layout-editor.vercel.app/
+> A browser-based 3D electrical-room layout editor built for the **Cloudworx Frontend Assessment**.
 
-1. What is the project?
+**🌐 Live Demo:** [room-layout-editor.vercel.app](https://room-layout-editor.vercel.app/)
 
-A browser-based 3D electrical-room layout editor built for the Cloudworx frontend assessment.
-Users can place and edit equipment such as Control Cabinets, Motors and Electrical Panels on a 20 × 12 m room with a 0.5 m grid. The editor also provides selection, movement, rotation, deletion, undo/redo, clearance validation, wiring, BOM, 2D plan view and English/Vietnamese support.
+---
 
+## 1. 🏭 What is the project?
 
-2. How I built it?
+A 3D workspace for designing an industrial electrical room.
 
-I designed the industrial-room UI and scene myself , then built it with React + TypeScript, React Three Fiber and Three.js.
-The equipment models were prepared for web use by optimizing the original GLB files and applying Draco compression, reducing the heavy source assets to much smaller browser-ready models.
-The scene uses centralized state for equipment, selection, wires and undo/redo. The 3D view, item list and properties panel stay synchronized through the same scene state.
+Users can place and edit:
 
-3. Requirements & Results
+- 🗄️ Control Cabinets
+- ⚙️ Motors
+- 🔌 Electrical Panels
 
-Requirement	Result
-Room	20 × 12 m
-Grid	0.5 m
-Equipment types	3
-Placement / Move / Rotate / Delete	✅
-Undo / Redo	✅
-Selection + Properties sync	✅
-Clearance rule	< 0.6 m
-BOM	✅
-English / Vietnamese	✅
-Wiring	✅
-2D Plan	✅
-Performance test	500 items
-FPS	76 FPS
-Draw calls	101
-Memory	18 / 24 MB
+The editor supports **placement, 0.5 m grid snapping, selection, movement, rotation, deletion, undo/redo, clearance validation, wiring, BOM, 2D plan view, and English/Vietnamese support.**
 
+**Room:** `20 × 12 m` &nbsp; **Grid:** `0.5 m`
 
-500-item performance
-With 500 placed items, the scene maintained 76 FPS and 101 draw calls, exceeding the assessment target of 50 FPS and staying below the 300 draw-call target.
+---
 
+## 2. 🛠️ How I built it
 
-4. AI Tools Used
-I used ChatGPT, Claude and Grok as development assistants for:
+I designed the **industrial-room UI and scene myself** and built the application using:
+
+`React` · `TypeScript` · `React Three Fiber` · `Three.js`
+
+### 3D Asset Workflow
+
+The original GLB models were heavy, so I prepared them for browser use:
+
+```text
+Original GLB
+    ↓
+Model optimization
+    ↓
+Geometry / asset reduction
+    ↓
+Draco compression
+    ↓
+Web-ready GLB
+    ↓
+React Three Fiber
+```
+
+The scene uses centralized state for **equipment, selection, wires and undo/redo**, keeping the 3D scene, item list and properties panel synchronized.
+
+---
+
+## 3. 📊 Requirements & Results
+
+| Requirement | Result |
+|---|:---:|
+| Room | **20 × 12 m** |
+| Grid | **0.5 m** |
+| Equipment types | **3** |
+| Place / Move / Rotate / Delete | ✅ |
+| Undo / Redo | ✅ |
+| Selection + Properties sync | ✅ |
+| Clearance rule | **< 0.6 m** |
+| BOM | ✅ |
+| English / Vietnamese | ✅ |
+| Wiring | ✅ |
+| 2D Plan | ✅ |
+| Performance test | **500 items** |
+
+### 🚀 500-Item Performance
+
+| Metric | Measured |
+|---|---:|
+| Placed items | **500** |
+| FPS | **76 FPS** |
+| Draw calls | **101** |
+| Memory | **18 / 24 MB** |
+
+**Result:** 500 placed items maintained **76 FPS** with only **101 draw calls**, exceeding the **50 FPS** target and staying below the **300 draw-call** target.
+
+---
+
+## 4. 🤖 AI Tools Used
+
+I used **ChatGPT, Claude and Grok** as development assistants for:
+
 - Understanding and breaking down the assessment
 - Debugging React / Three.js issues
 - Exploring implementation approaches
 - Model optimization and compression discussions
 - Reviewing UI and code decisions
 
+The **final UI, scene design and implementation decisions were mine**, and I integrated and tested the resulting code in the project.
 
-I made the final UI, scene and implementation decisions and integrated the resulting code into the project.
+---
+
+### 💻 Tech Stack
+
+`React` `TypeScript` `Vite` `Three.js` `React Three Fiber` `Redux` `GLB/glTF` `Draco` `Vercel`
+
