@@ -1,100 +1,80 @@
-# ⚡ Industrial Electrical Room — 3D Layout Editor
+# Industrial Electrical Room – 3D Layout Editor
 
-> A browser-based 3D electrical-room layout editor built for the **Cloudworx Frontend Assessment**.
+**Live Demo:** https://room-layout-editor.vercel.app/
 
-**🌐 Live Demo:** [room-layout-editor.vercel.app](https://room-layout-editor.vercel.app/)
+## 1. What is the project?
 
----
+This is a browser-based 3D electrical room layout editor built for the Cloudworx frontend assessment.
 
-## 1. 🏭 What is the project?
+The main idea is to let a user place electrical equipment in a room and arrange it easily. The project includes three equipment types:
 
-A 3D workspace for designing an industrial electrical room.
+- Control Cabinet
+- Motor
+- Electrical Panel
 
-Users can place and edit:
+The room is **20 × 12 m** with a **0.5 m grid**.
 
-- 🗄️ Control Cabinets
-- ⚙️ Motors
-- 🔌 Electrical Panels
+The editor supports placing, selecting, moving, rotating and deleting equipment. It also includes undo/redo, clearance checking, wiring, a BOM, 2D plan view and English/Vietnamese support.
 
-The editor supports **placement, 0.5 m grid snapping, selection, movement, rotation, deletion, undo/redo, clearance validation, wiring, BOM, 2D plan view, and English/Vietnamese support.**
+## 2. How I built it
 
-**Room:** `20 × 12 m` &nbsp; **Grid:** `0.5 m`
+I designed the UI and the overall 3D scene myself. I wanted it to feel like a simple industrial tool rather than a basic Three.js demo.
 
----
+I built the application using:
 
-## 2. 🛠️ How I built it
+- React
+- TypeScript
+- React Three Fiber
+- Three.js
+- Redux
+- Vite
 
-I designed the **industrial-room UI and scene myself** and built the application using:
+The original GLB models were quite large, so I optimized them and used **Draco compression** to make them smaller and more suitable for a browser application.
 
-`React` · `TypeScript` · `React Three Fiber` · `Three.js`
+The main scene state contains the placed equipment, selected item, wires and undo/redo history. This keeps the 3D scene, equipment list and properties panel in sync.
 
-### 3D Asset Workflow
+The editor also checks the distance between equipment. If two items are closer than **0.6 m**, they are treated as a clearance violation.
 
-The original GLB models were heavy, so I prepared them for browser use:
-
-```text
-Original GLB
-    ↓
-Model optimization
-    ↓
-Geometry / asset reduction
-    ↓
-Draco compression
-    ↓
-Web-ready GLB
-    ↓
-React Three Fiber
-```
-
-The scene uses centralized state for **equipment, selection, wires and undo/redo**, keeping the 3D scene, item list and properties panel synchronized.
-
----
-
-## 3. 📊 Requirements & Results
+## 3. Requirements and results
 
 | Requirement | Result |
-|---|:---:|
-| Room | **20 × 12 m** |
-| Grid | **0.5 m** |
-| Equipment types | **3** |
+|---|---|
+| Room size | 20 × 12 m |
+| Grid | 0.5 m |
+| Equipment types | 3 |
 | Place / Move / Rotate / Delete | ✅ |
 | Undo / Redo | ✅ |
 | Selection + Properties sync | ✅ |
-| Clearance rule | **< 0.6 m** |
+| Clearance check | < 0.6 m |
 | BOM | ✅ |
 | English / Vietnamese | ✅ |
 | Wiring | ✅ |
 | 2D Plan | ✅ |
-| Performance test | **500 items** |
 
-### 🚀 500-Item Performance
+### 500-item performance test
 
-| Metric | Measured |
-|---|---:|
-| Placed items | **500** |
-| FPS | **76 FPS** |
-| Draw calls | **101** |
-| Memory | **18 / 24 MB** |
+I tested the scene with **500 placed items**.
 
-**Result:** 500 placed items maintained **76 FPS** with only **101 draw calls**, exceeding the **50 FPS** target and staying below the **300 draw-call** target.
+- **FPS:** 76
+- **Draw calls:** 101
+- **Memory:** 18 / 24 MB
 
----
+The result was above the assessment target of **50 FPS** and below the **300 draw-call** target.
 
-## 4. 🤖 AI Tools Used
+## 4. AI tools used
 
-I used **ChatGPT, Claude and Grok** as development assistants for:
+I used **ChatGPT, Claude and Grok** as development assistants during the project.
 
-- Understanding and breaking down the assessment
-- Debugging React / Three.js issues
-- Exploring implementation approaches
-- Model optimization and compression discussions
-- Reviewing UI and code decisions
+They helped me with:
 
-The **final UI, scene design and implementation decisions were mine**, and I integrated and tested the resulting code in the project.
+- Understanding the assessment requirements
+- Debugging React and Three.js issues
+- Discussing implementation approaches
+- Model optimization and compression
+- Reviewing parts of the code and UI
 
----
+I made the final decisions for the **UI, scene design and implementation**, and integrated and tested the final application myself.
 
-### 💻 Tech Stack
+## Tech Stack
 
-`React` `TypeScript` `Vite` `Three.js` `React Three Fiber` `Redux` `GLB/glTF` `Draco` `Vercel`
-
+**React · TypeScript · React Three Fiber · Three.js · Redux · GLB/glTF · Draco · Vite · Vercel**
