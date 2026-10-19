@@ -1,0 +1,77 @@
+/* Paste into your main CSS file (index.css), AFTER `@import "tailwindcss";`.
+   Delete your old theme blocks first: any `@theme { --color-... }` for these names and any
+   `[data-theme=...]` blocks that define the same variables, so nothing conflicts. */
+
+/* ── 1) The real values, one set per theme ───────────────────────────────── */
+:root,
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --accent:        #3b82f6;
+  --bad:           #ef4444;
+  --good:          #22c55e;
+  --ink:           #e6edf7;
+  --ink-soft:      #a9b6c9;
+  --hint:          #6f7f96;
+  --line:          rgba(148, 163, 184, 0.18);
+  --surface-2:     #121c2d;
+  --panel-bg:      #0b1220;
+  --panel-header:  #0e1727;
+  --header-bg:     #0a1020;
+  --header-fg:     #e6edf7;
+  --header-border: rgba(255, 255, 255, 0.08);
+  --toolbar-bg:    rgba(10, 16, 30, 0.88);   /* floating pills stay dark in both themes */
+  --toolbar-fg:    #cbd5e1;
+  --status-bg:     rgba(10, 16, 30, 0.82);
+  --status-fg:     #94a3b8;
+  --swatch-ring:   #ffffff;
+  --thumb-bg:      #0d1622;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --accent:        #2563eb;
+  --bad:           #dc2626;
+  --good:          #16a34a;
+  --ink:           #0f1b2d;
+  --ink-soft:      #44546a;
+  --hint:          #7a8aa0;
+  --line:          rgba(15, 27, 45, 0.12);
+  --surface-2:     #ffffff;
+  --panel-bg:      #f3f6fb;
+  --panel-header:  #e9eff7;
+  --header-bg:     #ffffff;
+  --header-fg:     #0f1b2d;
+  --header-border: rgba(15, 27, 45, 0.10);
+  --toolbar-bg:    rgba(10, 16, 30, 0.88);
+  --toolbar-fg:    #cbd5e1;
+  --status-bg:     rgba(10, 16, 30, 0.82);
+  --status-fg:     #94a3b8;
+  --swatch-ring:   #0f1b2d;
+  --thumb-bg:      #e6edf6;
+}
+
+/* ── 2) Tell Tailwind the utilities (bg-panel-bg, text-ink, border-line …) read those variables.
+        `inline` makes the utility use var(--panel-bg) directly, so switching the attribute
+        switches every colour live. ─────────────────────────────────────────── */
+@theme inline {
+  --color-accent:        var(--accent);
+  --color-bad:           var(--bad);
+  --color-good:          var(--good);
+  --color-ink:           var(--ink);
+  --color-ink-soft:      var(--ink-soft);
+  --color-hint:          var(--hint);
+  --color-line:          var(--line);
+  --color-surface-2:     var(--surface-2);
+  --color-panel-bg:      var(--panel-bg);
+  --color-panel-header:  var(--panel-header);
+  --color-header-bg:     var(--header-bg);
+  --color-header-fg:     var(--header-fg);
+  --color-header-border: var(--header-border);
+  --color-toolbar-bg:    var(--toolbar-bg);
+  --color-toolbar-fg:    var(--toolbar-fg);
+  --color-status-bg:     var(--status-bg);
+  --color-status-fg:     var(--status-fg);
+}
+
+/* page background follows the theme too */
+body { background: var(--panel-bg); color: var(--ink); }
