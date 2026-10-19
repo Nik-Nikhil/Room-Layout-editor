@@ -29,9 +29,27 @@ interface SubMesh {
   colorable: boolean
 }
 
+// Compressed models (meshopt / KHR_mesh_quantization) arrive with Int8/Int16 (and sometimes interleaved)
+// attributes. applyMatrix4 on those ROUNDS the result to integers, which squashes and flattens the model.
+// Convert to plain Float32 first (getX/Y/Z/W de-normalise correctly).
+function toFloat32(geo: THREE.BufferGeometry) {
+  for (const name of ['position', 'normal', 'uv'] as const) {
+    const a = geo.getAttribute(name)
+    if (!a) continue
+    if (!(a as THREE.BufferAttribute).isBufferAttribute || !(a.array instanceof Float32Array) || (a as any).isInterleavedBufferAttribute) {
+      const n = a.itemSize, out = new Float32Array(a.count * n)
+      for (let i = 0; i < a.count; i++) {
+        out[i * n] = a.getX(i)
+        if (n > 1) out[i * n + 1] = a.getY(i)
+        if (n > 2) out[i * n + 2] = a.getZ(i)
+        if (n > 3) out[i * n + 3] = a.getW(i)
+      }
+      geo.setAttribute(name, new THREE.BufferAttribute(out, n))
+    }
+  }
+}
+
 function buildSubMeshes(scene: THREE.Object3D, kind: Kind): SubMesh[] {
-  // Work on a detached clone so we never mutate the cached GLB scene.
-  // Attach to a fresh Object3D so the root's own world matrix is identity.
   const wrapper = new THREE.Object3D()
   const root    = scene.clone(true)
   wrapper.add(root)
@@ -48,7 +66,7 @@ function buildSubMeshes(scene: THREE.Object3D, kind: Kind): SubMesh[] {
   root.scale.setScalar(sc)
   wrapper.updateMatrixWorld(true)
 
-  // ── Step 2: translate root so model is centred on XZ and bottom is at y=0 ─
+  // ── Step 2: centre on XZ, bottom at y = 0 ────────────────────────────────
   const box1 = new THREE.Box3().setFromObject(root)
   const ctr  = box1.getCenter(new THREE.Vector3())
   root.position.set(-ctr.x, -box1.min.y, -ctr.z)
@@ -64,7 +82,8 @@ function buildSubMeshes(scene: THREE.Object3D, kind: Kind): SubMesh[] {
     if (!mesh.isMesh || !mesh.geometry) return
 
     const geo = mesh.geometry.clone()
-    geo.applyMatrix4(mesh.matrixWorld)   // matrixWorld now includes root's corrected position
+    toFloat32(geo)                        // <- must happen before applyMatrix4
+    geo.applyMatrix4(mesh.matrixWorld)
     geo.deleteAttribute('uv2')
     geo.deleteAttribute('tangent')
     if (!geo.getAttribute('normal')) geo.computeVertexNormals()
@@ -89,18 +108,13 @@ function buildSubMeshes(scene: THREE.Object3D, kind: Kind): SubMesh[] {
     result.push({ geo, mat, colorable })
   })
 
-  // ── Step 4: fine-tune — nudge everything so the true lowest vertex sits
-  //    exactly on the grid plane (y = 0).  The bake above should already put
-  //    minY ≈ 0, but floating-point and multi-mesh models can leave a small
-  //    residual.  We never push geometry DOWN (minY > 0 means it's already
-  //    above the floor — leave it alone).
+  // ── Step 4: make sure the lowest vertex sits exactly on y = 0 ─────────────
   let minY = Infinity
   for (const sm of result) {
     const y = sm.geo.boundingBox?.min.y
     if (y != null && y < minY) minY = y
   }
-  if (Number.isFinite(minY) && minY < 0) {
-    // Only lift up if geometry is below the floor
+  if (Number.isFinite(minY) && minY !== 0) {
     const dy = -minY
     for (const sm of result) {
       sm.geo.translate(0, dy, 0)

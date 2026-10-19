@@ -14,7 +14,8 @@ export const KINDS: Record<Kind, { w: number; d: number; h: number; color: strin
 }
 
 export const GRID = { w: 20, d: 12, cell: 0.5, minGap: 0.6 }
-export const ROOM_LIMITS = { minW: 5, maxW: 80, minD: 5, maxD: 60 }
+export const MAX_ITEMS = 2000
+export const ROOM_LIMITS = { minW: 5, maxW: 200, minD: 5, maxD: 200 }
 
 // Mutable room dimensions — kept in sync with Redux state for non-React callers
 export const ROOM = { w: GRID.w, d: GRID.d }
@@ -73,17 +74,35 @@ function clamp(item: Item, roomW: number, roomD: number): Item {
 
 export interface Violation { a: Item; b: Item; gap: number }
 
+// Spatial hash: only items in neighbouring 2.5 m buckets are compared, so this is
+// roughly linear in item count (2000 items stays cheap during a drag).
+// 2.5 m > largest footprint (1.44) + minGap (0.6), so no violating pair can span more than one bucket.
 export function violations(items: Item[]): Violation[] {
   const out: Violation[] = []
+  const CELL = 2.5
+  const fps  = items.map(footprint)
+  const key  = (cx: number, cz: number) => cx * 100003 + cz
+  const buckets = new Map<number, number[]>()
+  items.forEach((it, i) => {
+    const k = key(Math.floor(it.x / CELL), Math.floor(it.z / CELL))
+    const list = buckets.get(k)
+    if (list) list.push(i); else buckets.set(k, [i])
+  })
   for (let i = 0; i < items.length; i++) {
-    const a = items[i], fa = footprint(a)
-    for (let j = i + 1; j < items.length; j++) {
-      const b = items[j], fb = footprint(b)
-      const gx = Math.abs(a.x - b.x) - (fa.w + fb.w) / 2
-      const gz = Math.abs(a.z - b.z) - (fa.d + fb.d) / 2
-      if (gx >= GRID.minGap || gz >= GRID.minGap) continue
-      const gap = Math.hypot(Math.max(gx, 0), Math.max(gz, 0))
-      if (gap < GRID.minGap) out.push({ a, b, gap })
+    const a = items[i], fa = fps[i]
+    const cx = Math.floor(a.x / CELL), cz = Math.floor(a.z / CELL)
+    for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) {
+      const list = buckets.get(key(cx + dx, cz + dz))
+      if (!list) continue
+      for (const j of list) {
+        if (j <= i) continue
+        const b = items[j], fb = fps[j]
+        const gx = Math.abs(a.x - b.x) - (fa.w + fb.w) / 2
+        const gz = Math.abs(a.z - b.z) - (fa.d + fb.d) / 2
+        if (gx >= GRID.minGap || gz >= GRID.minGap) continue
+        const gap = Math.hypot(Math.max(gx, 0), Math.max(gz, 0))
+        if (gap < GRID.minGap) out.push({ a, b, gap })
+      }
     }
   }
   return out
@@ -117,7 +136,8 @@ interface SceneState {
   _dragBeforeWires: Wire[]  | null
 }
 
-// Monotone counters — module-level so they survive slice re-creation
+// Monotone counters — module-level so they survive slice re-creation.
+// _seq is never reset, so ids stay unique even after clear + undo.
 let _seq = 0
 const _kindSeq: Record<Kind, number> = { cabinet: 0, motor: 0, panel: 0 }
 const MAX_HISTORY = 50
@@ -177,7 +197,7 @@ const sceneSlice = createSlice({
       state.placing = null
     },
     place(state, action: PayloadAction<{ x: number; z: number }>) {
-      if (!state.placing) return
+      if (!state.placing || state.items.length >= MAX_ITEMS) return
       const kind = state.placing
       const num  = ++_kindSeq[kind]
       const item = clamp(
@@ -205,69 +225,100 @@ const sceneSlice = createSlice({
       pushHistory(state, `Deleted ${id}`, nextItems, nextWires)
       state.selectedId = null
     },
-        addMany(state, action: PayloadAction<number>) {
-      const count = action.payload
+    // action.payload = TARGET TOTAL item count. Adds only what is missing (capped at MAX_ITEMS),
+    // never overlaps existing items, and grows the room if needed (it never shrinks).
+    addMany(state, action: PayloadAction<number>) {
+      const target = Math.min(MAX_ITEMS, Math.max(0, Math.floor(action.payload)))
+      const need   = target - state.items.length
+      if (need <= 0) return
+
       const kinds = Object.keys(KINDS) as Kind[]
-      const gap = GRID.minGap
-
-      // Largest footprint (accounts for 0°/90° rotation in the stress layout)
+      const ceilCell = (v: number) => Math.ceil(v / GRID.cell - 1e-9) * GRID.cell
       let maxW = 0, maxD = 0
-      for (const k of kinds) {
-        maxW = Math.max(maxW, KINDS[k].w, KINDS[k].d)
-        maxD = Math.max(maxD, KINDS[k].w, KINDS[k].d)
+      for (const k of kinds) { maxW = Math.max(maxW, KINDS[k].w); maxD = Math.max(maxD, KINDS[k].d) }
+      // steps are multiples of the 0.5 m cell, so positions are already on-grid (no snap drift)
+      const stepX = ceilCell(maxW + GRID.minGap)   // 2.5
+      const stepZ = ceilCell(maxD + GRID.minGap)   // 1.5
+
+      // Spatial hash — seeded with existing items; new slots are inserted as they are confirmed
+      // so the same batch never places two items that overlap each other.
+      const CELL = 2.5
+      const hashKey = (cx: number, cz: number) => cx * 100003 + cz
+      const buckets = new Map<number, Item[]>()
+      const insertBucket = (it: Item) => {
+        const k = hashKey(Math.floor(it.x / CELL), Math.floor(it.z / CELL))
+        const l = buckets.get(k)
+        if (l) l.push(it); else buckets.set(k, [it])
       }
-      const stepX = maxW + gap   // center-to-center so edges stay ≥ gap apart
-      const stepZ = maxD + gap
+      for (const it of state.items) insertBucket(it)
 
-      const cols = Math.ceil(Math.sqrt(count))
-      const rows = Math.ceil(count / cols)
+      const free = (x: number, z: number, fw: number, fd: number) => {
+        const cx = Math.floor(x / CELL), cz = Math.floor(z / CELL)
+        for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) {
+          for (const o of buckets.get(hashKey(cx + dx, cz + dz)) ?? []) {
+            const fo = footprint(o)
+            const gx = Math.abs(x - o.x) - (fw + fo.w) / 2
+            const gz = Math.abs(z - o.z) - (fd + fo.d) / 2
+            if (gx < GRID.minGap && gz < GRID.minGap &&
+                Math.hypot(Math.max(gx, 0), Math.max(gz, 0)) < GRID.minGap) return false
+          }
+        }
+        return true
+      }
 
-      // Grow room so the whole grid fits (snap to 0.5 m)
-      const needW = cols * stepX + maxW
-      const needD = rows * stepZ + maxD
-      const roomW = Math.min(
-        ROOM_LIMITS.maxW,
-        Math.max(state.roomW, Math.ceil(needW / GRID.cell) * GRID.cell),
-      )
-      const roomD = Math.min(
-        ROOM_LIMITS.maxD,
-        Math.max(state.roomD, Math.ceil(needD / GRID.cell) * GRID.cell),
-      )
+      // room: roughly square for the target; grows deeper if existing items block slots
+      const wantCols = Math.ceil(Math.sqrt((target * stepZ) / stepX))
+      const roomW = Math.min(ROOM_LIMITS.maxW, Math.max(state.roomW, ceilCell(wantCols * stepX + GRID.cell)))
+      const cols  = Math.max(1, Math.floor((roomW - GRID.cell) / stepX))
+      let roomD   = Math.min(ROOM_LIMITS.maxD,
+        Math.max(state.roomD, ceilCell(Math.ceil(target / cols) * stepZ + GRID.cell)))
 
-      state.roomW = roomW
-      state.roomD = roomD
-      ROOM.w = roomW
-      ROOM.d = roomD
-
-      const originX = -roomW / 2 + stepX / 2
-      const originZ = -roomD / 2 + stepZ / 2
-
+      // Build placeholder footprint (worst-case size) for the free() check when filling slots.
+      // We use maxW × maxD so that any kind can fit regardless of which kind ends up in that slot.
       const extra: Item[] = []
-      for (let k = 0; k < count; k++) {
-        const kind = kinds[k % kinds.length]
-        const num  = ++_kindSeq[kind]
-        const col  = k % cols
-        const row  = Math.floor(k / cols)
-        extra.push(
-          clamp(
-            {
-              id:  `${kind}-${++_seq}`,
-              num,
-              kind,
-              rot: 0,
-              x:   originX + col * stepX,
-              z:   originZ + row * stepZ,
-            },
-            roomW,
-            roomD,
-          ),
-        )
+      const tryFill = () => {
+        const originX = snap(-roomW / 2 + stepX / 2)
+        const originZ = snap(-roomD / 2 + stepZ / 2)
+        for (let row = 0; extra.length < need; row++) {
+          const z = originZ + row * stepZ
+          if (z + maxD / 2 > roomD / 2) break
+          for (let col = 0; col < cols && extra.length < need; col++) {
+            const x = originX + col * stepX
+            if (!free(x, z, maxW, maxD)) continue
+            const n    = state.items.length + extra.length
+            const kind = kinds[n % kinds.length]
+            const it   = clamp({ id: `${kind}-${++_seq}`, num: ++_kindSeq[kind], kind, rot: 0, x, z }, roomW, roomD)
+            extra.push(it)
+            // Register immediately so subsequent slots in this batch respect the gap.
+            insertBucket(it)
+          }
+        }
       }
-      pushHistory(state, `Added ${count} items`, [...state.items, ...extra])
+
+      for (;;) {
+        extra.length = 0   // reset the batch on each room-grow attempt
+        // Undo any insertBucket calls from the previous attempt (rebuild from scratch).
+        buckets.clear()
+        for (const it of state.items) insertBucket(it)
+        // Also reset the _kindSeq increments: rewind by what was tentatively used.
+        // We can't undo _seq (ids must stay unique), but kind nums restart each attempt.
+        // So we snapshot _kindSeq before and restore on retry.
+        const seqSnap = { ..._kindSeq }
+        tryFill()
+        if (extra.length >= need || roomD >= ROOM_LIMITS.maxD) break
+        // Restore kind counters before growing and retrying.
+        _kindSeq.cabinet = seqSnap.cabinet
+        _kindSeq.motor   = seqSnap.motor
+        _kindSeq.panel   = seqSnap.panel
+        roomD = Math.min(ROOM_LIMITS.maxD, roomD + stepZ * 2)
+      }
+
+      state.roomW = roomW; state.roomD = roomD
+      ROOM.w = roomW;      ROOM.d = roomD
+
+      pushHistory(state, `Added ${extra.length} items`, [...state.items, ...extra])
     },
     clearScene(state) {
-      _kindSeq.cabinet = 0; _kindSeq.motor = 0; _kindSeq.panel = 0
-      _seq = 0
       pushHistory(state, 'Cleared scene', [], [])
       state.selectedId     = null
       state.selectedWireId = null
@@ -330,7 +381,7 @@ const sceneSlice = createSlice({
     setLang(state, action: PayloadAction<Lang>) {
       state.lang = action.payload
     },
-     setRoomSize(state, action: PayloadAction<{ w: number; d: number }>) {
+    setRoomSize(state, action: PayloadAction<{ w: number; d: number }>) {
       const w = Math.min(ROOM_LIMITS.maxW, Math.max(ROOM_LIMITS.minW, action.payload.w))
       const d = Math.min(ROOM_LIMITS.maxD, Math.max(ROOM_LIMITS.minD, action.payload.d))
       state.roomW = w
